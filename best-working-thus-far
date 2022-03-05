@@ -1,0 +1,259 @@
+"""
+This Connect Four player just picks a random spot to play. It's pretty dumb.
+"""
+__author__ = "Adam A. Smith"  # replace my name with yours
+__license__ = "MIT"
+__date__ = "February 2018"
+
+import random
+import time
+import math
+import copy
+import numpy as np
+
+import evaluation
+
+
+class ComputerPlayer:
+    def __init__(self, id, difficulty_level):
+        """
+        Constructor, takes a difficulty level (likely the # of plies to look
+        ahead), and a player ID that's either 1 or 2 that tells the player what
+        its number is.
+        """
+        self.id = id
+        self.difficulty_level = difficulty_level
+
+    def pick_move(self, rack):
+        """
+        Pick the move to make. It will be passed a rack with the current board
+        layout, column-major. A 0 indicates no token is there, and 1 or 2
+        indicate discs from the two players. Column 0 is on the left, and row 0
+        is on the bottom. It must return an int indicating in which column to
+        drop a disc. The player current just pauses for half a second (for
+        effect), and then chooses a random valid move.
+        """
+
+        # self.id = computer therefore we can derive the opposing player
+        # TODO implement the self.id where it is a true false for maximizing
+        # state_list = _potential_moves(rack, self.id)
+        # best_move = -math.inf
+        # best_state = random.choice(state_list)
+        # for state in state_list:
+        #     next_move = minimax(state, self.difficulty_level, True, self.id, self.id, -math.inf, math.inf)
+        #     print(next_move)
+        #     if best_move < next_move:
+        #         best_move = next_move
+        #         best_state = state
+        state_list = _potential_moves(rack, self.id)
+        best_move = -math.inf
+        best_state = state_list[0]
+        for state in state_list:
+            next_move = self._minimax(state, self.difficulty_level, False)
+            print(next_move)
+            if best_move < next_move:
+                best_move = next_move
+                best_state = state
+            # In the case that best move = positive or negative inf and next move is also positive or negative
+            # select for the one that is most right at a point of zero without going deeper
+            elif best_move == next_move == math.inf or best_move == next_move == -math.inf:
+                if self._evaluation_function(best_state) < self._evaluation_function(state):
+                    best_state = state
+        for x in range(len(best_state)):
+            for y in range(len(best_state[0])):
+                if best_state[x][y] == rack[x][y]:
+                    pass
+                else:
+                    play = x
+                    break
+        return play
+
+    def _minimax(self, state, depth, maximizing_player):
+        """
+
+        :param state: Represents the current state being fed in
+        :param depth: How deep on the tree we are from a starting state
+        :param maximizing_player: True or False
+        :return: Max Heuristic at a given depth S.T. The move set it optimal
+        """
+        # If not the maximizing player find the other player's id else AI is maximizing player therefore set ID to
+        # itself
+        if not maximizing_player:
+            if self.id == 1:
+                other = 2
+            else:
+                other = 1
+        else:
+            other = self.id
+        # create potential states by creating a list of potential moves 1 step away
+        potential_state = _potential_moves(state, other)
+        # Checks to see if the depth is zero, is an end node, or the length of potential states = 0
+        # rest is mini-max set up
+        if depth == 0 or terminal_node(state, 1) or len(potential_state) == 0:
+            # TODO FIX???
+            return self._evaluation_function(state)
+        if maximizing_player:
+            score = -math.inf
+            for each in potential_state:
+                score = max(score, self._minimax(each, depth - 1, False))
+            return score
+        else:
+            score = math.inf
+            for each in potential_state:
+                score = min(score, self._minimax(each, depth - 1, True))
+            return score
+
+    def _evaluation_function(self, rack):
+        """
+            Evaluates the score of the rack using this point system
+            Point value is positive if it favors the AI, and negative if it favors its opponent.
+            If it contains at least one disc of each color, it cannot be used to win. It is worth 0.
+            If it contains 4 discs of the same color, it is worth ±∞ (since one player has won).
+            If it contains 3 discs of the same color (and 1 empty) it is worth ±100.
+            If it contains 2 discs of the same color (and 2 empties) it is worth ±10.
+            If it contains 1 disc (and 3 empties) it is worth ±1.
+            :param rack: the current state of the connect-four rack
+            :param cur_player: selection of who is playing computer or man
+            :return:
+            """
+        # Figure out whose who! Since computer is calls this it has to be the cur_player
+        computer = self.id
+        if computer == 1:
+            player = 2
+        else:
+            player = 1
+        value = 0
+
+        # vertical:
+        for y in range(0, len(rack[0])):
+            for x in range(0, len(rack)):
+                result = rack[x][y:y + 4]
+                if len(result) == 4:
+                    if result.count(computer) == 4:
+                        return math.inf
+                    elif result.count(computer) == 3 and result.count(player) == 0:
+                        value += 100
+                    elif result.count(computer) == 2 and result.count(player) == 0:
+                        value += 10
+                    elif result.count(computer) == 1 and result.count(player) == 0:
+                        value += 1
+                    elif result.count(player) == 4:
+                        return -math.inf
+                    elif result.count(player) == 3 and result.count(computer) == 0:
+                        value -= 100
+                    elif result.count(player) == 2 and result.count(computer) == 0:
+                        value -= 10
+                    elif result.count(player) == 1 and result.count(computer) == 0:
+                        value -= 1
+        # Horizontal
+        for y in range(0, len(rack[0])):
+            horizontal = []
+            for x in range(0, len(rack)):
+                horizontal.append(rack[x][y])
+            for i in range(len(horizontal)):
+                horizontal_result = horizontal[i: i + 4]
+                if len(horizontal_result) == 4:
+                    if horizontal_result.count(computer) == 4:
+                        return math.inf
+                    elif horizontal_result.count(computer) == 3 and horizontal_result.count(player) == 0:
+                        value += 100
+                    elif horizontal_result.count(computer) == 2 and horizontal_result.count(player) == 0:
+                        value += 10
+                    elif horizontal_result.count(computer) == 1 and horizontal_result.count(player) == 0:
+                        value += 1
+                    if horizontal_result.count(player) == 4:
+                        return -math.inf
+                    elif horizontal_result.count(player) == 3 and horizontal_result.count(computer) == 0:
+                        value -= 100
+                    elif horizontal_result.count(player) == 2 and horizontal_result.count(computer) == 0:
+                        value -= 10
+                    elif horizontal_result.count(player) == 1 and horizontal_result.count(computer) == 0:
+                        value -= 1
+        # Diagonal Check Let us imagine a matrix we see that when we are starting from the bottom and checking upwards
+        # we only need to check to the left and right. The Rule Check Right and Left but always go up one for each
+        for x in range(len(rack) - 3):
+            for y in range(len(rack[0]) - 3):
+                # Check Right Computer
+                quart = (rack[x][y], rack[x + 1][y + 1], rack[x + 2][y + 2], rack[x + 3][y + 3])
+                quart_return = quart_score(quart, computer, player)
+                if quart_return == math.inf or quart_return == -math.inf:
+                    return quart_return
+                else:
+                    value += quart_return
+        # backwards
+        for x in range(len(rack) - 3):
+            for y in range(len(rack[0]) - 3):
+                # Check Right
+                offset = len(rack)
+                quart = (rack[offset - x - 1][y], rack[offset - x - 2][y + 1], rack[offset - x - 3][y + 2],
+                         rack[offset - x - 4][y + 3])
+                quart_return = quart_score(quart, computer, player)
+                if quart_return == math.inf or quart_return == -math.inf:
+                    return quart_return
+                else:
+                    value += quart_return
+        return value
+
+
+def quart_score(quart, computer, player):
+    """
+    Abstraction for the purpose of not rewriting code when we can ensure its done correctly in a function
+    :param quart: Current Quart Generated
+    :param computer: Computer ID
+    :param player:  Player ID
+    :return: Heuristic Value
+    """
+    if quart.count(computer) == 4:
+        return math.inf
+    elif quart.count(computer) == 3 and quart.count(player) == 0:
+        return 100
+    elif quart.count(computer) == 2 and quart.count(player) == 0:
+        return 10
+    elif quart.count(computer) == 1 and quart.count(player) == 0:
+        return 1
+    if quart.count(player) == 4:
+        return -math.inf
+    elif quart.count(player) == 3 and quart.count(computer) == 0:
+        return -100
+    elif quart.count(player) == 2 and quart.count(computer) == 0:
+        return -10
+    elif quart.count(player) == 1 and quart.count(computer) == 0:
+        return -1
+    return 0
+
+
+def terminal_node(rack, comp_id):
+    score = evaluation.evaluation_function(rack, comp_id)
+    if score == math.inf or score == -math.inf:
+        return True
+    else:
+        return False
+
+
+def _potential_moves(rack, potential_id):
+    """
+    Takes in a rack and then finds all possible moves that said player can do one step away
+    :param rack: Takes in rack of state of the rack
+    :param potential_id: Takes in the player number to be played
+    :return: a list of potential moves
+    """
+    list_of_moves = []
+    for x in range(len(rack)):
+        #  if the count of zero is equal to zero then there is no space to place the button
+        if rack[x].count(0) == 0:
+            continue
+        # There exists a space this is a possible move
+        else:
+            # make a copy that is not a pointer to old rack
+            new_rack = copy.deepcopy(rack)
+            new_rack = list(new_rack)
+            # converts tuples in new_rack to list one column at a time
+            for col in range(len(new_rack)):
+                new_rack[col] = list(new_rack[col])
+            for index in range(len(rack[x])):
+                # once first zero is found make a new rack since we can place a button then proceed to place it.
+                if rack[x][index] == 0:
+                    new_rack[x][index] = potential_id
+                    list_of_moves.append(new_rack)
+                    break
+    return list_of_moves
